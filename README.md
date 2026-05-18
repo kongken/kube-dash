@@ -20,3 +20,9 @@ Butterfly requires a config backend. Run locally with a file config:
 ```bash
 go run ./cmd/kube-dash --config.type=file --config.file.path=config.yaml
 ```
+
+## Documentation
+
+- [API reference](docs/api.md)
+- [Development guide](docs/development.md)
+- [Deployment notes](docs/deployment.md)
