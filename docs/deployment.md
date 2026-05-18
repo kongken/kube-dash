@@ -3,6 +3,26 @@
 kube-dash is designed to run inside Kubernetes and uses in-cluster
 authentication by default.
 
+## Container Image
+
+Images are built and published to GitHub Container Registry by the
+`Docker` workflow (`.github/workflows/docker-publish.yml`) on every push to
+`main`, every semver tag (`v*.*.*`), and on a daily schedule.
+
+```
+ghcr.io/kongken/kube-dash:main      # latest main
+ghcr.io/kongken/kube-dash:vX.Y.Z    # tagged release
+```
+
+Pull requests trigger a build (without push) to validate the Dockerfile.
+Pushed images are signed with cosign using the workflow's OIDC identity.
+
+To build locally:
+
+```bash
+docker build -t kube-dash:dev .
+```
+
 ## Runtime Auth
 
 The server calls `rest.InClusterConfig()` unless `KUBE_DASH_KUBECONFIG` is set.
