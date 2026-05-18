@@ -20,7 +20,8 @@ Returns process health and whether the Kubernetes client has been initialized.
 
 ### `GET /api/v1/summary`
 
-Returns aggregate counts for namespaces, nodes, pods, deployments, and services.
+Returns aggregate counts for namespaces, nodes, pods, deployments, services, and
+ingresses.
 
 ```json
 {
@@ -38,7 +39,8 @@ Returns aggregate counts for namespaces, nodes, pods, deployments, and services.
     "unknown": 0
   },
   "deployments": 5,
-  "services": 7
+  "services": 7,
+  "ingresses": 2
 }
 ```
 
@@ -116,6 +118,43 @@ Each port contains:
 - `port`
 - `targetPort`
 - `protocol`
+
+### `GET /api/v1/ingresses?namespace=<name>`
+
+Returns ingresses sorted by namespace and name. If `namespace` is omitted,
+ingresses from all namespaces are returned.
+
+Item fields:
+
+- `name`
+- `namespace`
+- `className`
+- `rules`
+- `tls`
+- `loadBalancers`
+- `ageSeconds`
+
+Each rule contains:
+
+- `host`
+- `paths`
+
+Each path contains:
+
+- `path`
+- `pathType`
+- `serviceName`
+- `servicePort`
+
+Each TLS entry contains:
+
+- `hosts`
+- `secretName`
+
+Each load balancer entry contains:
+
+- `hostname`
+- `ip`
 
 ## Errors
 

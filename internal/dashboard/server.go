@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -69,6 +70,7 @@ func (s *Server) RegisterRoutes(r *gin.Engine) {
 	api.GET("/pods", s.pods)
 	api.GET("/deployments", s.deployments)
 	api.GET("/services", s.services)
+	api.GET("/ingresses", s.ingresses)
 }
 
 func kubernetesConfig() (*rest.Config, error) {
@@ -141,6 +143,11 @@ func (s *Server) summary(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
+	ingresses, err := client.NetworkingV1().Ingresses(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"namespaces":  len(namespaces.Items),
@@ -148,6 +155,7 @@ func (s *Server) summary(c *gin.Context) {
 		"pods":        podSummary(pods.Items),
 		"deployments": len(deployments.Items),
 		"services":    len(services.Items),
+		"ingresses":   len(ingresses.Items),
 	})
 }
 
@@ -284,6 +292,29 @@ func (s *Server) services(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"items": items})
 }
 
+func (s *Server) ingresses(c *gin.Context) {
+	client, ok := s.requireClient(c)
+	if !ok {
+		return
+	}
+
+	ctx, cancel := requestContext(c)
+	defer cancel()
+
+	list, err := client.NetworkingV1().Ingresses(namespaceParam(c)).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	items := make([]gin.H, 0, len(list.Items))
+	for _, ingress := range list.Items {
+		items = append(items, ingressResponse(ingress))
+	}
+	sortByNamespaceAndName(items)
+	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
 func writeError(c *gin.Context, err error) {
 	if errors.Is(err, context.DeadlineExceeded) {
 		c.JSON(http.StatusGatewayTimeout, gin.H{"error": err.Error()})
@@ -406,4 +437,74 @@ func serviceResponse(service corev1.Service) gin.H {
 		"ports":      ports,
 		"ageSeconds": ageSeconds(service.CreationTimestamp.Time),
 	}
+}
+
+func ingressResponse(ingress networkingv1.Ingress) gin.H {
+	rules := make([]gin.H, 0, len(ingress.Spec.Rules))
+	for _, rule := range ingress.Spec.Rules {
+		paths := []gin.H{}
+		if rule.HTTP != nil {
+			paths = make([]gin.H, 0, len(rule.HTTP.Paths))
+			for _, path := range rule.HTTP.Paths {
+				serviceName, servicePort := ingressBackendService(path.Backend)
+				paths = append(paths, gin.H{
+					"path":        path.Path,
+					"pathType":    pathType(path.PathType),
+					"serviceName": serviceName,
+					"servicePort": servicePort,
+				})
+			}
+		}
+		rules = append(rules, gin.H{
+			"host":  rule.Host,
+			"paths": paths,
+		})
+	}
+
+	tls := make([]gin.H, 0, len(ingress.Spec.TLS))
+	for _, item := range ingress.Spec.TLS {
+		tls = append(tls, gin.H{
+			"hosts":      item.Hosts,
+			"secretName": item.SecretName,
+		})
+	}
+
+	loadBalancers := make([]gin.H, 0, len(ingress.Status.LoadBalancer.Ingress))
+	for _, item := range ingress.Status.LoadBalancer.Ingress {
+		loadBalancers = append(loadBalancers, gin.H{
+			"hostname": item.Hostname,
+			"ip":       item.IP,
+		})
+	}
+
+	return gin.H{
+		"name":          ingress.Name,
+		"namespace":     ingress.Namespace,
+		"className":     ingressClassName(ingress),
+		"rules":         rules,
+		"tls":           tls,
+		"loadBalancers": loadBalancers,
+		"ageSeconds":    ageSeconds(ingress.CreationTimestamp.Time),
+	}
+}
+
+func ingressClassName(ingress networkingv1.Ingress) string {
+	if ingress.Spec.IngressClassName != nil {
+		return *ingress.Spec.IngressClassName
+	}
+	return ingress.Annotations["kubernetes.io/ingress.class"]
+}
+
+func pathType(pathType *networkingv1.PathType) string {
+	if pathType == nil {
+		return ""
+	}
+	return string(*pathType)
+}
+
+func ingressBackendService(backend networkingv1.IngressBackend) (string, string) {
+	if backend.Service == nil {
+		return "", ""
+	}
+	return backend.Service.Name, backend.Service.Port.String()
 }

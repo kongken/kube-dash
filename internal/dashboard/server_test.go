@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -29,6 +30,7 @@ func TestSummary(t *testing.T) {
 		},
 		&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "default"}},
 		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "default"}},
+		&networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "default"}},
 	)
 
 	response := performRequest(router, http.MethodGet, "/api/v1/summary")
@@ -42,6 +44,9 @@ func TestSummary(t *testing.T) {
 	}
 	if body["namespaces"].(float64) != 1 {
 		t.Fatalf("expected one namespace, got %#v", body["namespaces"])
+	}
+	if body["ingresses"].(float64) != 1 {
+		t.Fatalf("expected one ingress, got %#v", body["ingresses"])
 	}
 }
 
@@ -67,6 +72,66 @@ func TestNamespaceFilterForPods(t *testing.T) {
 	}
 	if len(body.Items) != 1 || body.Items[0].Name != "frontend" || body.Items[0].Namespace != "default" {
 		t.Fatalf("unexpected pod list: %#v", body.Items)
+	}
+}
+
+func TestNamespaceFilterForIngresses(t *testing.T) {
+	pathType := networkingv1.PathTypePrefix
+	router := testRouter(
+		&networkingv1.Ingress{
+			ObjectMeta: metav1.ObjectMeta{Name: "frontend", Namespace: "default"},
+			Spec: networkingv1.IngressSpec{Rules: []networkingv1.IngressRule{
+				{
+					Host: "dash.example.com",
+					IngressRuleValue: networkingv1.IngressRuleValue{HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{
+							{
+								Path:     "/",
+								PathType: &pathType,
+								Backend: networkingv1.IngressBackend{Service: &networkingv1.IngressServiceBackend{
+									Name: "frontend",
+									Port: networkingv1.ServiceBackendPort{Number: 80},
+								}},
+							},
+						},
+					}},
+				},
+			}},
+		},
+		&networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: "scheduler", Namespace: "kube-system"}},
+	)
+
+	response := performRequest(router, http.MethodGet, "/api/v1/ingresses?namespace=default")
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, response.Code, response.Body.String())
+	}
+
+	var body struct {
+		Items []struct {
+			Name      string `json:"name"`
+			Namespace string `json:"namespace"`
+			Rules     []struct {
+				Host  string `json:"host"`
+				Paths []struct {
+					Path        string `json:"path"`
+					PathType    string `json:"pathType"`
+					ServiceName string `json:"serviceName"`
+					ServicePort string `json:"servicePort"`
+				} `json:"paths"`
+			} `json:"rules"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Items) != 1 || body.Items[0].Name != "frontend" || body.Items[0].Namespace != "default" {
+		t.Fatalf("unexpected ingress list: %#v", body.Items)
+	}
+	if body.Items[0].Rules[0].Host != "dash.example.com" {
+		t.Fatalf("unexpected ingress host: %#v", body.Items[0].Rules)
+	}
+	if body.Items[0].Rules[0].Paths[0].ServiceName != "frontend" || body.Items[0].Rules[0].Paths[0].ServicePort != "80" {
+		t.Fatalf("unexpected ingress backend: %#v", body.Items[0].Rules[0].Paths)
 	}
 }
 

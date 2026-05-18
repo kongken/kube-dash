@@ -15,6 +15,7 @@ The service account needs read access to the resources exposed by the API:
 - pods
 - services
 - deployments
+- ingresses
 
 ## Minimal RBAC
 
@@ -35,6 +36,9 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
