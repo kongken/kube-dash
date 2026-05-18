@@ -3,6 +3,9 @@
 kube-dash exposes read-only Kubernetes dashboard endpoints under `/api/v1`.
 All Kubernetes list calls use a 10 second request timeout.
 
+It also exposes a Model Context Protocol endpoint at `/mcp` using the official
+Go SDK streamable HTTP transport.
+
 ## Health
 
 ### `GET /healthz`
@@ -155,6 +158,27 @@ Each load balancer entry contains:
 
 - `hostname`
 - `ip`
+
+## MCP
+
+### `POST /mcp`
+
+Serves MCP over streamable HTTP. The endpoint is stateless and returns JSON
+responses for tool calls.
+
+Available tools:
+
+- `cluster_summary`
+- `list_namespaces`
+- `list_nodes`
+- `list_pods`
+- `list_deployments`
+- `list_services`
+- `list_ingresses`
+
+The list tools for pods, deployments, services, and ingresses accept an optional
+`namespace` argument. When `namespace` is omitted, they return resources from
+all namespaces.
 
 ## Errors
 

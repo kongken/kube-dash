@@ -62,6 +62,7 @@ func (s *Server) Close() error {
 
 func (s *Server) RegisterRoutes(r *gin.Engine) {
 	r.GET("/healthz", s.healthz)
+	r.Any("/mcp", gin.WrapH(s.mcpHTTPHandler()))
 
 	api := r.Group("/api/v1")
 	api.GET("/summary", s.summary)
@@ -335,6 +336,12 @@ func sortByNamespaceAndName(items []gin.H) {
 		left := items[i]["namespace"].(string) + "/" + items[i]["name"].(string)
 		right := items[j]["namespace"].(string) + "/" + items[j]["name"].(string)
 		return left < right
+	})
+}
+
+func sortByName(items []gin.H) {
+	sort.Slice(items, func(i, j int) bool {
+		return items[i]["name"].(string) < items[j]["name"].(string)
 	})
 }
 

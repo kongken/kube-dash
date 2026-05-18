@@ -40,3 +40,6 @@ When changing handlers or response fields:
 1. Update or add tests in `internal/dashboard`.
 2. Update `docs/api.md`.
 3. Keep README as a short entrypoint and link to detailed docs.
+
+MCP tools are exposed from the same backend server at `/mcp`. Keep MCP tool
+responses aligned with the corresponding REST API response fields.

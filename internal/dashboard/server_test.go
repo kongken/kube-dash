@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -132,6 +133,44 @@ func TestNamespaceFilterForIngresses(t *testing.T) {
 	}
 	if body.Items[0].Rules[0].Paths[0].ServiceName != "frontend" || body.Items[0].Rules[0].Paths[0].ServicePort != "80" {
 		t.Fatalf("unexpected ingress backend: %#v", body.Items[0].Rules[0].Paths)
+	}
+}
+
+func TestMCPListTools(t *testing.T) {
+	router := testRouter()
+
+	request := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, response.Code, response.Body.String())
+	}
+
+	var body struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Result.Tools) == 0 {
+		t.Fatalf("expected MCP tools, got %#v", body)
+	}
+	found := false
+	for _, tool := range body.Result.Tools {
+		if tool.Name == "cluster_summary" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected cluster_summary tool, got %#v", body.Result.Tools)
 	}
 }
 
