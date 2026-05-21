@@ -3,6 +3,7 @@ package dashboard
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"sort"
@@ -513,5 +514,11 @@ func ingressBackendService(backend networkingv1.IngressBackend) (string, string)
 	if backend.Service == nil {
 		return "", ""
 	}
-	return backend.Service.Name, backend.Service.Port.String()
+	if backend.Service.Port.Name != "" {
+		return backend.Service.Name, backend.Service.Port.Name
+	}
+	if backend.Service.Port.Number != 0 {
+		return backend.Service.Name, fmt.Sprintf("%d", backend.Service.Port.Number)
+	}
+	return backend.Service.Name, ""
 }
